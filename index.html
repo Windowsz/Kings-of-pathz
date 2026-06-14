@@ -3,23 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Kings of Pathz - Mobile Low-Poly</title>
+    <title>Kings of Pathz</title>
     <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
     <div id="canvas-container"></div>
+
+    <!-- Loading overlay -->
+    <div id="loading">
+        <div class="loading-title">⚔️ KINGS OF PATHZ</div>
+        <div class="loading-track"><div id="loading-bar"></div></div>
+        <div class="loading-sub">Summoning the realm…</div>
+    </div>
+
+    <!-- Top-left HUD -->
     <div id="ui">
         <div id="score-display">Score: <span id="score">0</span></div>
-        <div id="instructions">Click to Lock Mouse. WASD to Move.</div>
+        <div id="hp-bar"><div id="hp-fill"></div><span id="hp-text">100 / 100</span></div>
+        <div id="instructions"></div>
     </div>
+
+    <!-- Weapon switch bar -->
+    <div id="weapon-bar">
+        <button id="wpn-sword" class="wpn-btn active">⚔️</button>
+        <button id="wpn-axe" class="wpn-btn">🪓</button>
+        <button id="wpn-spear" class="wpn-btn">🔱</button>
+        <button id="wpn-hammer" class="wpn-btn">🔨</button>
+    </div>
+
     <div id="crosshair"></div>
+
+    <!-- Ability slot bar -->
+    <div id="ability-bar">
+        <button id="slot-0" class="slot-btn active"><span class="slot-icon">✂️</span><span class="slot-cd"></span></button>
+        <button id="slot-1" class="slot-btn"><span class="slot-icon">🌪️</span><span class="slot-cd"></span></button>
+        <button id="slot-2" class="slot-btn"><span class="slot-icon">🔱</span><span class="slot-cd"></span></button>
+    </div>
+
+    <!-- Action buttons -->
+    <div id="action-cluster">
+        <button id="bag-btn" class="mini-btn">🎒</button>
+        <button id="enhance-btn" class="mini-btn">⚒️</button>
+        <button id="special-btn">SPECIAL</button>
+        <button id="attack-btn">SWING</button>
+    </div>
+
+    <!-- Mobile move/look zones -->
     <div id="mobile-touch-zones">
         <div id="move-zone">
-            <div id="joystick-visual"></div>
+            <div id="joystick-base"><div id="joystick-knob"></div></div>
         </div>
         <div id="look-zone"></div>
     </div>
-    <button id="attack-btn">SWING</button>
+
+    <!-- Feedback overlays -->
+    <div id="damage-flash"></div>
+    <div id="toast"></div>
+
+    <div id="game-over">
+        <div class="go-panel">
+            <div class="go-title">💀 You Fell</div>
+            <div class="go-score">Score: <span id="final-score">0</span></div>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
 </body>

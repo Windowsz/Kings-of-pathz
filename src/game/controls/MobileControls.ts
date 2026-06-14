@@ -1,91 +1,100 @@
 import * as THREE from 'three';
 import { Player } from '@/game/entities/Player';
 
+const JOYSTICK_RADIUS = 55; // px the thumb can travel from the base
+
 export class MobileControls {
   private camera: THREE.PerspectiveCamera;
   private player: Player;
+
   private moveTouchId: number | null = null;
+  private moveBase = { x: 0, y: 0 };
+  private knob: HTMLElement | null;
+  private base: HTMLElement | null;
+
   private lookTouchId: number | null = null;
-  private moveStart = { x: 0, y: 0 };
   private lookLast = { x: 0, y: 0 };
 
   constructor(camera: THREE.PerspectiveCamera, player: Player) {
     this.camera = camera;
     this.player = player;
-    this.setupMobileUI();
+    this.knob = document.getElementById('joystick-knob');
+    this.base = document.getElementById('joystick-base');
+    this.setup();
   }
 
-  private setupMobileUI(): void {
-    const touchZones = document.getElementById('mobile-touch-zones');
-    const attackBtn = document.getElementById('attack-btn');
-    const instructionsElement = document.getElementById('instructions');
+  private setup(): void {
+    const zones = document.getElementById('mobile-touch-zones');
+    if (zones) zones.style.display = 'block';
+    const instructions = document.getElementById('instructions');
+    if (instructions) instructions.innerText = 'Left thumb to move • Right side to look';
 
-    if (touchZones) touchZones.style.display = 'block';
-    if (attackBtn) attackBtn.style.display = 'flex';
-    if (instructionsElement) instructionsElement.innerText = 'Left side to Move. Right side to Look.';
-
-    this.setupMoveZone();
-    this.setupLookZone();
-    this.setupAttackButton();
-  }
-
-  private setupMoveZone(): void {
     const moveZone = document.getElementById('move-zone');
-    if (!moveZone) return;
+    moveZone?.addEventListener('touchstart', (e) => this.moveStart(e), { passive: false });
+    moveZone?.addEventListener('touchmove', (e) => this.moveMove(e), { passive: false });
+    moveZone?.addEventListener('touchend', (e) => this.moveEnd(e));
+    moveZone?.addEventListener('touchcancel', (e) => this.moveEnd(e));
 
-    moveZone.addEventListener('touchstart', (e) => this.handleMoveTouchStart(e));
-    moveZone.addEventListener('touchmove', (e) => this.handleMoveTouchMove(e));
-    moveZone.addEventListener('touchend', (e) => this.handleMoveTouchEnd(e));
-  }
-
-  private setupLookZone(): void {
     const lookZone = document.getElementById('look-zone');
-    if (!lookZone) return;
-
-    lookZone.addEventListener('touchstart', (e) => this.handleLookTouchStart(e));
-    lookZone.addEventListener('touchmove', (e) => this.handleLookTouchMove(e));
-    lookZone.addEventListener('touchend', (e) => this.handleLookTouchEnd(e));
+    lookZone?.addEventListener('touchstart', (e) => this.lookStart(e), { passive: false });
+    lookZone?.addEventListener('touchmove', (e) => this.lookMove(e), { passive: false });
+    lookZone?.addEventListener('touchend', (e) => this.lookEnd(e));
+    lookZone?.addEventListener('touchcancel', (e) => this.lookEnd(e));
   }
 
-  private setupAttackButton(): void {
-    const attackBtn = document.getElementById('attack-btn');
-    if (!attackBtn) return;
-
-    attackBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      this.player.attack();
-    });
+  private showJoystick(x: number, y: number): void {
+    if (this.base) {
+      this.base.style.display = 'block';
+      this.base.style.left = `${x}px`;
+      this.base.style.top = `${y}px`;
+    }
+    this.moveKnob(0, 0);
   }
 
-  private handleMoveTouchStart(e: TouchEvent): void {
+  private moveKnob(dx: number, dy: number): void {
+    if (this.knob) this.knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  }
+
+  private hideJoystick(): void {
+    if (this.base) this.base.style.display = 'none';
+  }
+
+  private moveStart(e: TouchEvent): void {
     e.preventDefault();
     if (this.moveTouchId !== null) return;
     const touch = e.changedTouches[0];
     this.moveTouchId = touch.identifier;
-    this.moveStart = { x: touch.clientX, y: touch.clientY };
+    this.moveBase = { x: touch.clientX, y: touch.clientY };
+    this.showJoystick(touch.clientX, touch.clientY);
   }
 
-  private handleMoveTouchMove(e: TouchEvent): void {
+  private moveMove(e: TouchEvent): void {
     e.preventDefault();
-    for (let touch of e.changedTouches) {
-      if (touch.identifier === this.moveTouchId) {
-        const dx = touch.clientX - this.moveStart.x;
-        const dy = touch.clientY - this.moveStart.y;
-        this.player.setMovement(dy < -20, dy > 20, dx < -20, dx > 20);
+    for (const touch of Array.from(e.changedTouches)) {
+      if (touch.identifier !== this.moveTouchId) continue;
+      let dx = touch.clientX - this.moveBase.x;
+      let dy = touch.clientY - this.moveBase.y;
+      const len = Math.hypot(dx, dy);
+      if (len > JOYSTICK_RADIUS) {
+        dx = (dx / len) * JOYSTICK_RADIUS;
+        dy = (dy / len) * JOYSTICK_RADIUS;
       }
+      this.moveKnob(dx, dy);
+      // screen-down (positive dy) = move backward, so invert y
+      this.player.setMoveInput(dx / JOYSTICK_RADIUS, -dy / JOYSTICK_RADIUS);
     }
   }
 
-  private handleMoveTouchEnd(e: TouchEvent): void {
-    for (let touch of e.changedTouches) {
-      if (touch.identifier === this.moveTouchId) {
-        this.moveTouchId = null;
-        this.player.setMovement(false, false, false, false);
-      }
+  private moveEnd(e: TouchEvent): void {
+    for (const touch of Array.from(e.changedTouches)) {
+      if (touch.identifier !== this.moveTouchId) continue;
+      this.moveTouchId = null;
+      this.player.setMoveInput(0, 0);
+      this.hideJoystick();
     }
   }
 
-  private handleLookTouchStart(e: TouchEvent): void {
+  private lookStart(e: TouchEvent): void {
     e.preventDefault();
     if (this.lookTouchId !== null) return;
     const touch = e.changedTouches[0];
@@ -93,27 +102,26 @@ export class MobileControls {
     this.lookLast = { x: touch.clientX, y: touch.clientY };
   }
 
-  private handleLookTouchMove(e: TouchEvent): void {
+  private lookMove(e: TouchEvent): void {
     e.preventDefault();
-    for (let touch of e.changedTouches) {
-      if (touch.identifier === this.lookTouchId) {
-        const dx = touch.clientX - this.lookLast.x;
-        const dy = touch.clientY - this.lookLast.y;
-        this.camera.rotation.y -= dx * 0.005;
-        this.camera.rotation.x -= dy * 0.005;
-        this.camera.rotation.x = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, this.camera.rotation.x));
-        this.lookLast = { x: touch.clientX, y: touch.clientY };
-      }
+    for (const touch of Array.from(e.changedTouches)) {
+      if (touch.identifier !== this.lookTouchId) continue;
+      const dx = touch.clientX - this.lookLast.x;
+      const dy = touch.clientY - this.lookLast.y;
+      this.camera.rotation.y -= dx * 0.005;
+      this.camera.rotation.x -= dy * 0.005;
+      this.camera.rotation.x = Math.max(-Math.PI / 2.5, Math.min(Math.PI / 2.5, this.camera.rotation.x));
+      this.lookLast = { x: touch.clientX, y: touch.clientY };
     }
   }
 
-  private handleLookTouchEnd(e: TouchEvent): void {
-    for (let touch of e.changedTouches) {
+  private lookEnd(e: TouchEvent): void {
+    for (const touch of Array.from(e.changedTouches)) {
       if (touch.identifier === this.lookTouchId) this.lookTouchId = null;
     }
   }
 
   public update(_delta: number): void {
-    // Update logic handled by event listeners
+    // input handled via events
   }
 }

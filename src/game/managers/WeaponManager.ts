@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { PALETTE } from '@/game/utils/Constants';
 import { WeaponType, WeaponItem } from '@/game/entities/WeaponSystem';
 import { SpecialAbility, SpecialAbilityType } from '@/game/entities/SpecialAbilitySystem';
+import { applyToon, outlineGroup } from '@/game/utils/Render';
 
 export class WeaponManager {
   private weaponMesh: THREE.Group;
@@ -9,6 +9,7 @@ export class WeaponManager {
   private currentWeapon: WeaponItem | null = null;
   private isSwinging: boolean = false;
   private swingTimer: number = 0;
+  private swingResolved: boolean = false;
   private baseQuaternion: THREE.Quaternion;
   private pointLight: THREE.PointLight;
   private specialAbilityEffect: THREE.Group | null = null;
@@ -56,9 +57,14 @@ export class WeaponManager {
         mesh = this.createSwordMesh(weapon);
     }
 
+    applyToon(mesh);
+    outlineGroup(mesh as unknown as THREE.Group);
+
     this.weaponMesh.add(mesh);
-    this.weaponMesh.position.set(0.3, -0.4, -0.8);
-    this.weaponMesh.rotation.set(0.2, -0.4, -0.3);
+    // portrait view has a narrow horizontal FOV, so keep the weapon small and near centre-bottom
+    this.weaponMesh.scale.setScalar(0.5);
+    this.weaponMesh.position.set(0.16, -0.42, -0.75);
+    this.weaponMesh.rotation.set(0.2, -0.35, -0.3);
     this.baseQuaternion.copy(this.weaponMesh.quaternion);
   }
 
@@ -74,7 +80,7 @@ export class WeaponManager {
       metalness: 0.8 + weapon.enhancement * 0.01,
       roughness: 0.3 - weapon.enhancement * 0.01,
       emissive: this.getWeaponEmissive(weapon),
-      emissiveIntensity: Math.min(1, weapon.enhancement * 0.05),
+      emissiveIntensity: Math.min(0.55, weapon.enhancement * 0.03),
     });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
     blade.position.y = 0.6;
@@ -103,7 +109,7 @@ export class WeaponManager {
       flatShading: true,
       metalness: 0.8,
       emissive: this.getWeaponEmissive(weapon),
-      emissiveIntensity: Math.min(1, weapon.enhancement * 0.05),
+      emissiveIntensity: Math.min(0.55, weapon.enhancement * 0.03),
     });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = 0.7;
@@ -132,7 +138,7 @@ export class WeaponManager {
       flatShading: true,
       metalness: 0.8,
       emissive: this.getWeaponEmissive(weapon),
-      emissiveIntensity: Math.min(1, weapon.enhancement * 0.05),
+      emissiveIntensity: Math.min(0.55, weapon.enhancement * 0.03),
     });
     const point = new THREE.Mesh(pointGeo, pointMat);
     point.position.y = 0.8;
@@ -161,7 +167,7 @@ export class WeaponManager {
       flatShading: true,
       metalness: 0.8,
       emissive: this.getWeaponEmissive(weapon),
-      emissiveIntensity: Math.min(1, weapon.enhancement * 0.05),
+      emissiveIntensity: Math.min(0.55, weapon.enhancement * 0.03),
     });
     const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = 0.6;
@@ -216,7 +222,15 @@ export class WeaponManager {
     if (!this.isSwinging) {
       this.isSwinging = true;
       this.swingTimer = 0;
+      this.swingResolved = false;
     }
+  }
+
+  /** Returns true if this swing's damage was already applied; marks it resolved otherwise. */
+  public consumeSwingResolved(): boolean {
+    if (this.swingResolved) return true;
+    this.swingResolved = true;
+    return false;
   }
 
   public activateSpecialAbility(ability: SpecialAbility): void {

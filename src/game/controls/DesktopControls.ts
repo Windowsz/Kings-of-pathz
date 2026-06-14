@@ -5,6 +5,7 @@ export class DesktopControls {
   private camera: THREE.PerspectiveCamera;
   private player: Player;
   private container: HTMLElement | null;
+  private pressed = new Set<string>();
 
   constructor(camera: THREE.PerspectiveCamera, player: Player) {
     this.camera = camera;
@@ -14,49 +15,31 @@ export class DesktopControls {
   }
 
   private setupControls(): void {
-    const instructionsElement = document.getElementById('instructions');
-    if (instructionsElement) {
-      instructionsElement.innerHTML = `Click to Lock Mouse. WASD to Move. Click to Attack.<br><small>1-4: Weapon | Q/W/R: Abilities | SPACE: Activate Ability | I: Stats | E: Enhance</small>`;
+    const instructions = document.getElementById('instructions');
+    if (instructions) {
+      instructions.innerHTML =
+        'Click to lock mouse • WASD move • Click attack<br><small>1-4 weapon · Q/E/R ability · Space special · F enhance · I stats</small>';
     }
 
     if (this.container) {
-      this.container.addEventListener('click', () => {
-        this.container?.requestPointerLock();
-      });
+      this.container.addEventListener('click', () => this.container?.requestPointerLock());
     }
 
-    document.addEventListener('keydown', (e) => this.handleKeyDown(e));
-    document.addEventListener('keyup', (e) => this.handleKeyUp(e));
+    document.addEventListener('keydown', (e) => this.handleKey(e.code, true));
+    document.addEventListener('keyup', (e) => this.handleKey(e.code, false));
     document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
     document.addEventListener('mousedown', () => this.handleMouseDown());
   }
 
-  private handleKeyDown(e: KeyboardEvent): void {
-    switch (e.code) {
-      case 'KeyW':
-        this.player.setMovement(true, false, false, false);
-        break;
-      case 'KeyS':
-        this.player.setMovement(false, true, false, false);
-        break;
-      case 'KeyA':
-        this.player.setMovement(false, false, true, false);
-        break;
-      case 'KeyD':
-        this.player.setMovement(false, false, false, true);
-        break;
-    }
-  }
+  private handleKey(code: string, down: boolean): void {
+    if (code !== 'KeyW' && code !== 'KeyA' && code !== 'KeyS' && code !== 'KeyD') return;
+    if (down) this.pressed.add(code);
+    else this.pressed.delete(code);
 
-  private handleKeyUp(e: KeyboardEvent): void {
-    switch (e.code) {
-      case 'KeyW':
-      case 'KeyS':
-      case 'KeyA':
-      case 'KeyD':
-        this.player.setMovement(false, false, false, false);
-        break;
-    }
+    this.player.setMoveInput(
+      Number(this.pressed.has('KeyD')) - Number(this.pressed.has('KeyA')),
+      Number(this.pressed.has('KeyW')) - Number(this.pressed.has('KeyS'))
+    );
   }
 
   private handleMouseMove(e: MouseEvent): void {
@@ -68,11 +51,11 @@ export class DesktopControls {
 
   private handleMouseDown(): void {
     if (document.pointerLockElement === this.container) {
-      // Attack handled by GameManager
+      this.player.attack();
     }
   }
 
   public update(_delta: number): void {
-    // Update logic handled by event listeners
+    // input handled via events
   }
 }

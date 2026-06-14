@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { Monster } from '@/game/entities/Monster';
-import { PALETTE } from '@/game/utils/Constants';
+import { AssetManager } from '@/game/utils/AssetManager';
+import { ENEMY_TYPES, GAME_CONFIG } from '@/game/utils/Constants';
 
 export class EntityManager {
   private scene: THREE.Scene;
   private monsters: Monster[] = [];
+  private lastCenter = new THREE.Vector3();
+  private pendingRespawns = 0;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -16,44 +19,65 @@ export class EntityManager {
     }
   }
 
-  public spawnMonster(cameraPosition?: THREE.Vector3): void {
-    const geometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
-    const material = new THREE.MeshStandardMaterial({
-      color: PALETTE.monster,
-      flatShading: true,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
+  public spawnMonster(center?: THREE.Vector3): void {
+    if (this.monsters.length >= GAME_CONFIG.MAX_MONSTERS) return;
 
+    const cfg = ENEMY_TYPES[Math.floor(Math.random() * ENEMY_TYPES.length)];
+    const instance = AssetManager.createInstance(cfg.key, cfg.facingOffset ?? 0);
+    if (!instance) return;
+
+    const origin = center ?? this.lastCenter;
     const angle = Math.random() * Math.PI * 2;
-    const radius = 15 + Math.random() * 10;
-    const pos = cameraPosition || new THREE.Vector3(0, 0.6, 0);
+    const radius =
+      GAME_CONFIG.MONSTER_SPAWN_RADIUS_MIN +
+      Math.random() * (GAME_CONFIG.MONSTER_SPAWN_RADIUS_MAX - GAME_CONFIG.MONSTER_SPAWN_RADIUS_MIN);
 
-    mesh.position.set(
-      pos.x + Math.cos(angle) * radius,
-      0.6,
-      pos.z + Math.sin(angle) * radius
+    instance.root.position.set(
+      origin.x + Math.cos(angle) * radius,
+      0,
+      origin.z + Math.sin(angle) * radius
     );
 
-    const monster = new Monster(mesh);
-    this.scene.add(mesh);
-    this.monsters.push(monster);
+    this.scene.add(instance.root);
+    this.monsters.push(new Monster(instance, cfg));
   }
 
-  public update(delta: number, cameraPosition: THREE.Vector3, time: number): void {
-    this.monsters.forEach((monster) => {
-      monster.update(delta, cameraPosition, time);
-    });
-  }
+  /** Advances all monsters; returns how many melee hits landed on the player this frame. */
+  public update(delta: number, center: THREE.Vector3, time: number): number {
+    this.lastCenter.copy(center);
 
-  public removeMonster(index: number): void {
-    if (index >= 0 && index < this.monsters.length) {
-      const monster = this.monsters[index];
-      this.scene.remove(monster.getMesh());
-      this.monsters.splice(index, 1);
+    let meleeHits = 0;
+    for (let i = this.monsters.length - 1; i >= 0; i--) {
+      const monster = this.monsters[i];
+      if (monster.update(delta, center, time)) meleeHits++;
+
+      if (monster.isRemovable()) {
+        this.scene.remove(monster.getMesh());
+        monster.dispose();
+        this.monsters.splice(i, 1);
+        this.scheduleRespawn();
+      }
     }
+    return meleeHits;
+  }
+
+  private scheduleRespawn(): void {
+    this.pendingRespawns++;
+    setTimeout(() => {
+      this.pendingRespawns--;
+      this.spawnMonster();
+    }, GAME_CONFIG.RESPAWN_DELAY_MS);
   }
 
   public getMonsters(): Monster[] {
     return this.monsters;
+  }
+
+  public clear(): void {
+    for (const monster of this.monsters) {
+      this.scene.remove(monster.getMesh());
+      monster.dispose();
+    }
+    this.monsters = [];
   }
 }
