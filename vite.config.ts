@@ -15,5 +15,6 @@ export default defineConfig({
     target: 'ES2020',
     minify: 'terser',
     sourcemap: false,
+    outDir: 'dist',
   },
 });
