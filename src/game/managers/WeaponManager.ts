@@ -398,5 +398,3 @@ export class WeaponManager {
     return this.currentAbility;
   }
 }
-
-import { SpecialAbilityType } from '@/game/entities/SpecialAbilitySystem';
