@@ -16,7 +16,7 @@ export class DesktopControls {
   private setupControls(): void {
     const instructionsElement = document.getElementById('instructions');
     if (instructionsElement) {
-      instructionsElement.innerText = 'Click Screen to Lock Mouse. WASD to Move. Click to Attack.';
+      instructionsElement.innerHTML = `Click to Lock Mouse. WASD to Move. Click to Attack.<br><small>1-4: Weapon | Q/W/R: Abilities | SPACE: Activate Ability | I: Stats | E: Enhance</small>`;
     }
 
     if (this.container) {
@@ -32,20 +32,31 @@ export class DesktopControls {
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
-    const keyMap: { [key: string]: (v: boolean) => void } = {
-      KeyW: (v) => this.player.setMovement(v, false, false, false),
-      KeyA: (v) => this.player.setMovement(false, false, v, false),
-      KeyS: (v) => this.player.setMovement(false, v, false, false),
-      KeyD: (v) => this.player.setMovement(false, false, false, v),
-    };
-
-    if (keyMap[e.code]) {
-      e.preventDefault();
+    switch (e.code) {
+      case 'KeyW':
+        this.player.setMovement(true, false, false, false);
+        break;
+      case 'KeyS':
+        this.player.setMovement(false, true, false, false);
+        break;
+      case 'KeyA':
+        this.player.setMovement(false, false, true, false);
+        break;
+      case 'KeyD':
+        this.player.setMovement(false, false, false, true);
+        break;
     }
   }
 
   private handleKeyUp(e: KeyboardEvent): void {
-    // Reset movement flags
+    switch (e.code) {
+      case 'KeyW':
+      case 'KeyS':
+      case 'KeyA':
+      case 'KeyD':
+        this.player.setMovement(false, false, false, false);
+        break;
+    }
   }
 
   private handleMouseMove(e: MouseEvent): void {
@@ -57,7 +68,7 @@ export class DesktopControls {
 
   private handleMouseDown(): void {
     if (document.pointerLockElement === this.container) {
-      this.player.attack();
+      // Attack handled by GameManager
     }
   }
 
