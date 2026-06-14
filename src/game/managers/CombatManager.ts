@@ -2,7 +2,13 @@ import * as THREE from 'three';
 import { WeaponManager } from '@/game/managers/WeaponManager';
 import { Monster } from '@/game/entities/Monster';
 import { ScoreManager } from '@/game/managers/ScoreManager';
-import { SpecialAbilitySystem } from '@/game/entities/SpecialAbilitySystem';
+import { SpecialAbilitySystem, SpecialAbilityType } from '@/game/entities/SpecialAbilitySystem';
+
+const AOE_ABILITIES = new Set<SpecialAbilityType>([
+  SpecialAbilityType.WHIRLWIND,
+  SpecialAbilityType.SHOCKWAVE,
+  SpecialAbilityType.SPIN_ATTACK,
+]);
 
 export class CombatManager {
   private weaponManager: WeaponManager;
@@ -25,50 +31,78 @@ export class CombatManager {
     this.camera = camera;
   }
 
+  /** Resolves a swing against the monster list; returns the number of kills. */
   public performAttack(monsters: Monster[]): number {
     if (!this.weaponManager.isCurrentlySwinging()) return 0;
+    if (this.weaponManager.consumeSwingResolved()) return 0; // one resolution per swing
 
     const weapon = this.weaponManager.getCurrentWeapon();
     if (!weapon) return 0;
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-
-    let hitCount = 0;
     const range = this.weaponManager.getSwingRange();
     const damage = this.weaponManager.getDamage();
     const ability = this.weaponManager.getCurrentAbility();
+    const knockback = weapon.stats.knockback + (ability ? 1.5 : 0);
+    const isAoe = ability ? AOE_ABILITIES.has(ability.type) : false;
 
-    const intersects = raycaster.intersectObjects(
-      monsters.map((m) => m.getMesh())
-    );
+    const hit = new Set<Monster>();
 
-    for (const intersection of intersects) {
-      if (intersection.distance > range) break;
-
-      const targetMonster = monsters.find((m) => m.getMesh() === intersection.object);
-      if (targetMonster) {
-        const abilityName = ability ? ` [${ability.name}]` : '';
-        console.log(`Hit! Damage: ${damage.toFixed(1)}${abilityName}`);
-        this.createHitEffect(targetMonster.getMesh().position, damage, ability?.damageMultiplier || 1);
-        hitCount++;
-        this.scoreManager.addPoints(Math.ceil(damage));
+    if (isAoe) {
+      // hit everything within range of the player
+      for (const monster of monsters) {
+        if (monster.isDead()) continue;
+        if (monster.getPosition().distanceTo(this.camera.position) <= range) hit.add(monster);
+      }
+    } else {
+      // hit whatever the crosshair ray strikes within range
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+      const intersects = raycaster.intersectObjects(
+        monsters.map((m) => m.getMesh()),
+        true
+      );
+      for (const intersection of intersects) {
+        if (intersection.distance > range) break;
+        const owner = this.findOwner(intersection.object, monsters);
+        if (owner && !owner.isDead()) hit.add(owner);
       }
     }
 
-    return hitCount;
+    let kills = 0;
+    const mult = ability?.damageMultiplier ?? 1;
+    for (const monster of hit) {
+      const knockDir = new THREE.Vector3().subVectors(monster.getPosition(), this.camera.position);
+      this.createHitEffect(monster.getPosition(), damage, mult);
+      monster.applyKnockback(knockDir, knockback * 0.25);
+      const died = monster.takeDamage(damage);
+      if (died) {
+        kills++;
+        this.scoreManager.addPoints(monster.getScoreValue());
+      }
+    }
+
+    return kills;
   }
 
-  private createHitEffect(position: THREE.Vector3, damage: number, multiplier: number): void {
+  private findOwner(object: THREE.Object3D, monsters: Monster[]): Monster | null {
+    let node: THREE.Object3D | null = object;
+    while (node) {
+      const owner = monsters.find((m) => m.getMesh() === node);
+      if (owner) return owner;
+      node = node.parent;
+    }
+    return null;
+  }
+
+  private createHitEffect(position: THREE.Vector3, _damage: number, multiplier: number): void {
     const particleCount = Math.ceil(multiplier * 6);
-    const pGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
-    const pMat = new THREE.MeshBasicMaterial({ 
-      color: multiplier > 1 ? 0xFF00FF : 0xffffff 
-    });
+    const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+    const mat = new THREE.MeshBasicMaterial({ color: multiplier > 1 ? 0xff00ff : 0xffe7a0 });
 
     for (let i = 0; i < particleCount; i++) {
-      const p = new THREE.Mesh(pGeo, pMat);
+      const p = new THREE.Mesh(geo, mat);
       p.position.copy(position);
+      p.position.y += 1;
       this.scene.add(p);
 
       const vel = new THREE.Vector3(
@@ -77,13 +111,12 @@ export class CombatManager {
         (Math.random() - 0.5) * 4
       );
 
-      const pTimer = setInterval(() => {
+      const timer = setInterval(() => {
         p.position.addScaledVector(vel, 0.016);
         vel.y -= 0.1;
         p.scale.subScalar(0.03);
-
         if (p.scale.x <= 0) {
-          clearInterval(pTimer);
+          clearInterval(timer);
           this.scene.remove(p);
         }
       }, 16);

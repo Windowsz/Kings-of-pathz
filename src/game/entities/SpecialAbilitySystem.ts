@@ -143,6 +143,7 @@ export class SpecialAbilitySystem {
     // Set default abilities
     this.slots[0].setAbility(SpecialAbilityType.SLASH);
     if (this.slots[1]) this.slots[1].setAbility(SpecialAbilityType.WHIRLWIND);
+    if (this.slots[2]) this.slots[2].setAbility(SpecialAbilityType.PIERCE);
   }
 
   public setAbilityInSlot(slotIndex: number, abilityType: SpecialAbilityType): boolean {

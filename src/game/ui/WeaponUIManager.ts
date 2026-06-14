@@ -1,154 +1,60 @@
-import { WeaponItem, WeaponSystem, ENHANCEMENT_CONSTANTS } from '@/game/entities/WeaponSystem';
-import { SpecialAbilitySystem, SpecialAbilityType, SPECIAL_ABILITIES } from '@/game/entities/SpecialAbilitySystem';
+import { WeaponItem, WeaponSystem, WeaponType } from '@/game/entities/WeaponSystem';
+import { SpecialAbilitySystem } from '@/game/entities/SpecialAbilitySystem';
+
+export interface WeaponUIActions {
+  onEnhance: () => void;
+  onSwitchWeapon: (type: WeaponType) => void;
+  onSelectSlot: (slot: number) => void;
+}
+
+const WEAPON_ICONS: Record<WeaponType, string> = {
+  [WeaponType.SWORD]: '⚔️',
+  [WeaponType.AXE]: '🪓',
+  [WeaponType.SPEAR]: '🔱',
+  [WeaponType.HAMMER]: '🔨',
+};
 
 export class WeaponUIManager {
   private weaponSystem: WeaponSystem;
   private abilitySystem: SpecialAbilitySystem;
+  private actions: WeaponUIActions;
   private container: HTMLElement;
-  private isOpen: boolean = false;
+  private isOpen = false;
 
-  constructor(weaponSystem: WeaponSystem, abilitySystem: SpecialAbilitySystem) {
+  constructor(
+    weaponSystem: WeaponSystem,
+    abilitySystem: SpecialAbilitySystem,
+    actions: WeaponUIActions
+  ) {
     this.weaponSystem = weaponSystem;
     this.abilitySystem = abilitySystem;
+    this.actions = actions;
+
     this.container = document.createElement('div');
     this.container.id = 'weapon-ui';
-    this.setupStyles();
     document.body.appendChild(this.container);
-    this.createUI();
-  }
 
-  private setupStyles(): void {
-    const style = document.createElement('style');
-    style.textContent = `
-      #weapon-ui {
-        position: fixed;
-        bottom: 20px;
-        left: 20px;
-        background: rgba(0, 0, 0, 0.95);
-        border: 2px solid #FFD700;
-        border-radius: 8px;
-        padding: 15px;
-        max-width: 350px;
-        color: #fff;
-        font-family: monospace;
-        z-index: 20;
-        display: none;
-      }
+    // single delegated handler survives innerHTML re-renders
+    const dispatch = (ev: Event) => {
+      const target = (ev.target as HTMLElement).closest('[data-action]') as HTMLElement | null;
+      if (!target) return;
+      ev.preventDefault();
+      const action = target.dataset.action;
+      if (action === 'enhance') this.actions.onEnhance();
+      else if (action === 'close') this.toggle();
+      else if (action === 'weapon') this.actions.onSwitchWeapon(target.dataset.weapon as WeaponType);
+      else if (action === 'slot') this.actions.onSelectSlot(Number(target.dataset.slot));
+    };
+    this.container.addEventListener('click', dispatch);
+    this.container.addEventListener('touchstart', dispatch, { passive: false });
 
-      #weapon-ui.open {
-        display: block;
-      }
-
-      .weapon-info {
-        margin-bottom: 15px;
-        font-size: 12px;
-      }
-
-      .weapon-title {
-        font-weight: bold;
-        color: #FFD700;
-        margin-bottom: 8px;
-        font-size: 14px;
-      }
-
-      .stat-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 3px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      }
-
-      .stat-label {
-        color: #999;
-      }
-
-      .stat-value {
-        color: #0F0;
-        font-weight: bold;
-      }
-
-      .enhancement-zone {
-        color: #FF6B6B;
-        font-weight: bold;
-      }
-
-      .enhancement-zone.safe {
-        color: #0F0;
-      }
-
-      .enhancement-info {
-        margin-top: 10px;
-        padding: 8px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 4px;
-        margin-bottom: 15px;
-      }
-
-      .stones {
-        color: #00BFFF;
-        font-weight: bold;
-      }
-
-      .abilities-section {
-        margin-top: 15px;
-        padding-top: 15px;
-        border-top: 1px solid #FFD700;
-      }
-
-      .abilities-title {
-        color: #00FFFF;
-        font-weight: bold;
-        margin-bottom: 8px;
-      }
-
-      .ability-slot {
-        background: rgba(0, 150, 255, 0.2);
-        border: 1px solid #00BFFF;
-        border-radius: 4px;
-        padding: 6px;
-        margin-bottom: 6px;
-        font-size: 11px;
-      }
-
-      .ability-slot.active {
-        background: rgba(255, 0, 0, 0.3);
-        border-color: #FF0000;
-      }
-
-      .ability-name {
-        color: #00FFFF;
-        font-weight: bold;
-      }
-
-      .ability-cooldown {
-        color: #FFD700;
-        float: right;
-      }
-
-      .ability-cooldown.ready {
-        color: #00FF00;
-      }
-
-      .ability-desc {
-        color: #999;
-        font-size: 10px;
-        margin-top: 2px;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  private createUI(): void {
     this.update();
   }
 
   public toggle(): void {
     this.isOpen = !this.isOpen;
-    if (this.isOpen) {
-      this.container.classList.add('open');
-    } else {
-      this.container.classList.remove('open');
-    }
+    this.container.classList.toggle('open', this.isOpen);
+    if (this.isOpen) this.update();
   }
 
   public update(): void {
@@ -157,83 +63,67 @@ export class WeaponUIManager {
 
     const info = this.weaponSystem.getEnhancementInfo(weapon.enhancement);
     const stones = this.weaponSystem.getEnhancementStones();
-    const inSafeZone = info.inSafeZone;
-    const zoneText = inSafeZone ? '✓ SAFE ZONE' : '⚠ DANGER ZONE';
-    const zoneColor = inSafeZone ? 'safe' : '';
-
-    // Build ability slots HTML
-    let abilitiesHTML = '<div class="abilities-section"><div class="abilities-title">🛡️ SPECIAL ABILITIES</div>';
-    
-    this.abilitySystem.getAllSlots().forEach((slot, index) => {
-      const ability = slot.getAbility();
-      const isActive = this.abilitySystem.getActiveSlotIndex() === index;
-      const canUse = slot.canUseAbility();
-      const cooldownPercent = slot.getCooldownPercent();
-      
-      const activeClass = isActive ? 'active' : '';
-      const readyClass = canUse ? 'ready' : '';
-      
-      if (ability) {
-        const cooldownText = canUse ? '✓ Ready' : `${(cooldownPercent * 100).toFixed(0)}%`;
-        abilitiesHTML += `
-          <div class="ability-slot ${activeClass}">
-            <div class="ability-name">${ability.icon} ${ability.name} (${index + 1})</div>
-            <div class="ability-cooldown ${readyClass}">${cooldownText}</div>
-            <div class="ability-desc">${ability.description}</div>
-            <div class="stat-row" style="border: none; margin-top: 2px;">
-              <span style="color: #FF6B6B;">DMG: ${ability.damageMultiplier.toFixed(1)}x</span>
-              <span style="color: #00FFFF;">CD: ${ability.cooldown.toFixed(1)}s</span>
-            </div>
-          </div>
-        `;
-      }
-    });
-    
-    abilitiesHTML += '</div>';
+    const canAfford = stones >= info.materialCost;
+    const zoneText = info.inSafeZone ? '✓ Safe zone' : '⚠ Danger zone';
 
     this.container.innerHTML = `
-      <div class="weapon-info">
-        <div class="weapon-title">⚔️ ${weapon.type.toUpperCase()} +${weapon.enhancement}</div>
-        <div class="stat-row">
-          <span class="stat-label">DMG:</span>
-          <span class="stat-value">${weapon.stats.baseDamage.toFixed(1)}</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">SPD:</span>
-          <span class="stat-value">${weapon.stats.attackSpeed.toFixed(2)}x</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">RNG:</span>
-          <span class="stat-value">${weapon.stats.range.toFixed(1)}m</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">KB:</span>
-          <span class="stat-value">${weapon.stats.knockback.toFixed(1)}</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">CRIT:</span>
-          <span class="stat-value">${(weapon.stats.critChance * 100).toFixed(1)}%</span>
-        </div>
-        <div class="stat-row" style="border: none; margin-top: 10px;">
-          <span class="stat-label">Zone:</span>
-          <span class="enhancement-zone ${zoneColor}">${zoneText}</span>
-        </div>
-        <div class="enhancement-info">
-          <div class="stat-row">
-            <span class="stat-label">Success Rate:</span>
-            <span class="stat-value">${info.successRate.toFixed(0)}%</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Cost:</span>
-            <span class="stones">${info.materialCost} stones</span>
-          </div>
-          <div class="stat-row">
-            <span class="stat-label">Available:</span>
-            <span class="stones">${stones} stones</span>
-          </div>
-        </div>
+      <div class="ui-header">
+        <span>Inventory</span>
+        <button class="ui-close" data-action="close">✕</button>
       </div>
-      ${abilitiesHTML}
+
+      <div class="weapon-tabs">
+        ${(Object.values(WeaponType) as WeaponType[])
+          .map(
+            (type) => `
+          <button class="weapon-tab ${type === weapon.type ? 'active' : ''}"
+                  data-action="weapon" data-weapon="${type}">
+            ${WEAPON_ICONS[type]}
+          </button>`
+          )
+          .join('')}
+      </div>
+
+      <div class="weapon-title">${WEAPON_ICONS[weapon.type]} ${weapon.type.toUpperCase()} +${weapon.enhancement}</div>
+
+      <div class="stat-grid">
+        ${this.stat('DMG', weapon.stats.baseDamage.toFixed(1))}
+        ${this.stat('SPD', weapon.stats.attackSpeed.toFixed(2) + 'x')}
+        ${this.stat('RNG', weapon.stats.range.toFixed(1) + 'm')}
+        ${this.stat('KB', weapon.stats.knockback.toFixed(1))}
+        ${this.stat('CRIT', (weapon.stats.critChance * 100).toFixed(0) + '%')}
+        ${this.stat('Zone', zoneText)}
+      </div>
+
+      <div class="enhance-box">
+        <div class="enhance-row"><span>Success</span><b>${info.successRate.toFixed(0)}%</b></div>
+        <div class="enhance-row"><span>Cost</span><b class="stones">${info.materialCost} 💎</b></div>
+        <div class="enhance-row"><span>You have</span><b class="stones">${stones} 💎</b></div>
+        <button class="enhance-btn ${canAfford ? '' : 'disabled'}" data-action="enhance">
+          ⚒️ Enhance Weapon
+        </button>
+      </div>
+
+      <div class="abilities-title">Special Abilities (tap to equip active)</div>
+      <div class="ability-list">
+        ${this.abilitySystem
+          .getAllSlots()
+          .map((slot, i) => {
+            const ability = slot.getAbility();
+            const active = this.abilitySystem.getActiveSlotIndex() === i;
+            if (!ability) return `<div class="ability-row empty" data-action="slot" data-slot="${i}">Slot ${i + 1}: empty</div>`;
+            return `
+              <div class="ability-row ${active ? 'active' : ''}" data-action="slot" data-slot="${i}">
+                <div class="ability-name">${ability.icon} ${ability.name}</div>
+                <div class="ability-meta">${ability.damageMultiplier.toFixed(1)}x · CD ${ability.cooldown}s</div>
+              </div>`;
+          })
+          .join('')}
+      </div>
     `;
+  }
+
+  private stat(label: string, value: string): string {
+    return `<div class="stat"><span class="stat-label">${label}</span><span class="stat-value">${value}</span></div>`;
   }
 }
