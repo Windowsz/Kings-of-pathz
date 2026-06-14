@@ -10,6 +10,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "terser": "^5.48.0",
     "three": "0.160.0"
   },
   "devDependencies": {

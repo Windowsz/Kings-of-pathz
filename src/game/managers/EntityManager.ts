@@ -39,9 +39,9 @@ export class EntityManager {
     this.monsters.push(monster);
   }
 
-  public update(delta: number, cameraPosition: THREE.Vector3): void {
+  public update(delta: number, cameraPosition: THREE.Vector3, time: number): void {
     this.monsters.forEach((monster) => {
-      monster.update(delta, cameraPosition);
+      monster.update(delta, cameraPosition, time);
     });
   }
 

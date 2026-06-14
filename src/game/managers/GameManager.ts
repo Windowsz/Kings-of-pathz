@@ -119,7 +119,7 @@ export class GameManager {
 
     this.controls.update(delta);
     this.player.update(delta);
-    this.entityManager.update(delta, this.camera);
+    this.entityManager.update(delta, this.camera.position, time);
     this.weaponManager.update(delta, time);
     this.abilitySystem.update(delta);
     
